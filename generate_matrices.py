@@ -1,7 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
+np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 
-N = 10  # number of vertices
+
+N = 8  # number of vertices
 max_distance = 10
 # ratio = 0.5  # total number of connections in the graph, max is N(N-1)
 start_location = int(np.random.randint(0, N))
@@ -49,11 +51,6 @@ def create_matrices(_N, _max_distance):
     return _connection_matrix, _vertice_array_x, _vertice_array_y, _distance_matrix, _weight_matrix, _pheromone_matrix
 
 
-def create_graph():
-
-    return
-
-
 def get_distance(_point1, _point2):
     _distance = np.linalg.norm(_point2 - _point1)
     return _distance
@@ -70,7 +67,6 @@ def create_path(_connection_matrix, _start_location, _N):
 
 def path_length(_path, _distance_matrix):
     _length_of_path = 0
-    _path = _path.astype(int)
     for i in range(len(_path) - 1):
         _length_of_path += _distance_matrix[_path[i + 1], _path[i]]
     return _length_of_path
@@ -109,13 +105,21 @@ def simplify_entire_path(_path):
         _number_of_temp_paths = len(_path_candidates_list)
         for i in range(_number_of_temp_paths):
             _temp_path_candidates, _duplicate_indices = simplify_path_once(_path_candidates_list[i])
+            # _temp_path_candidates = [x for x in _temp_path_candidates if x != []]
+            # _duplicate_indices = [x for x in _duplicate_indices if x != []]
             _temp_simplified_paths, _temp_path_candidates = store_candidates(_temp_path_candidates, _duplicate_indices)
             _number_of_simplified_paths = len(_temp_simplified_paths)
+            # _simplified_paths = [_temp_simplified_paths[j] for j in range(_number_of_simplified_paths)]
             for j in range(_number_of_simplified_paths):
                 _simplified_paths.append(_temp_simplified_paths[j])
             _number_of_path_candidates = len(_temp_path_candidates)
             for j in range(_number_of_path_candidates):
                 _path_candidates.append(_temp_path_candidates[j])
+            # _path_candidates = [_temp_path_candidates[j] for j in range(_number_of_path_candidates)]
+            if len(_duplicate_indices) == 0:
+                _duplicates = False
+                _simplified_paths = _path_candidates
+                return _simplified_paths
         _path_candidates_list = np.copy(_path_candidates)
         _seen = set()
         _path_candidates_list = [item for item in _path_candidates_list if
@@ -167,7 +171,7 @@ connection_matrix, vertice_array_x, vertice_array_y, distance_matrix, weight_mat
 # print('--------')
 # print(pheromone_matrix)
 
-path = create_path(connection_matrix, start_location, N)
+path = create_path(connection_matrix, start_location, 12)
 print(f"Original path: {path}")
 path_candidates = simplify_entire_path(path)
 print(f"Path candidates: {path_candidates}")
@@ -191,22 +195,29 @@ print(f"Length of shortest path: {shortest_length:.3f}")
 print(f"Shortest path: {shortest_path}")
 
 fig, ax = plt.subplots(1, 3, figsize=(12, 4))
+annotations = np.arange(1, N + 1, 1)
 ax[0].set_aspect('equal')
 ax[1].set_aspect('equal')
 ax[2].set_aspect('equal')
 pos1 = ax[0].pcolormesh(connection_matrix, cmap='gray_r', edgecolors='darkgreen', linewidth='0.01')
+for axis in [ax[0].xaxis, ax[0].yaxis]:
+    axis.set(ticks=np.arange(0.5, len(annotations)), ticklabels=annotations)
 pos2 = ax[1].pcolormesh(distance_matrix, cmap='gray_r', edgecolors='darkred', linewidth='0.01')
-pos3 = ax[2].plot(vertice_array_x, vertice_array_y, 'ko', markersize=8, markerfacecolor='none')
-annotation = np.arange(1, N + 1, 1)
-for i, value in enumerate(annotation):
-    ax[2].annotate(value, (vertice_array_x[i], vertice_array_y[i]), fontsize=13)
+for axis in [ax[1].xaxis, ax[1].yaxis]:
+    axis.set(ticks=np.arange(0.5, len(annotations)), ticklabels=annotations)
+pos3 = ax[2].plot(vertice_array_x, vertice_array_y, 'wo', markersize=12, markeredgecolor='black',
+                  markerfacecolor='white', alpha=1, zorder=2)
+annotations = np.arange(1, N + 1, 1)
+
+for i, value in enumerate(annotations):
+    ax[2].annotate(value, (vertice_array_x[i], vertice_array_y[i]), fontsize=10, color='black',
+                  horizontalalignment='center', verticalalignment='center')
 for i in range(N):
     for j in range(N):
         if connection_matrix[i, j] == 1:
             x_plot = np.array([vertice_array_x[i], vertice_array_x[j]])
             y_plot = np.array([vertice_array_y[i], vertice_array_y[j]])
-            ax[2].plot(x_plot, y_plot, 'k-', linewidth=0.8)
-
+            ax[2].plot(x_plot, y_plot, 'k-', linewidth=0.8, zorder=1)
 
 # pos = ax.imshow(distance_matrix, cmap='gray')
 ax[0].set_title("Connection matrix")
