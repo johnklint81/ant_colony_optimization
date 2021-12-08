@@ -4,7 +4,6 @@ from scipy.spatial import Delaunay
 
 np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
 
-N = 120  # number of vertices
 max_distance = 20
 max_steps = 80
 # ratio = 0.5  # total number of connections in the graph, max is N(N-1)
@@ -13,13 +12,19 @@ alpha = 0.8
 beta = 1.0
 rho = 0.5
 max_pheromone_per_ant = 1.0
-number_of_iterations = 20
+number_of_iterations = 300
 
 
 def create_matrices(_N, _max_distance):
     # Location of vertice coordinates
     _vertice_array_x = np.random.rand(_N) * _max_distance
     _vertice_array_y = np.random.rand(_N) * _max_distance
+
+    _vertice_array_x[0] = 0.5
+    _vertice_array_y[0] = 0.5
+
+    _vertice_array_x[-1] = 19.5
+    _vertice_array_y[-1] = 19.5
     _vertices = np.array([_vertice_array_x, _vertice_array_y]).T
 
     # Connection matrix
@@ -53,7 +58,7 @@ def create_matrices(_N, _max_distance):
     np.fill_diagonal(_weight_matrix, 0)
 
     # Pheromone matrix
-    _pheromone_matrix = np.ones([N, N])
+    _pheromone_matrix = np.ones([_N, _N])
     _pheromone_matrix = np.where(_connection_matrix == 1, _pheromone_matrix, 0)
     return _connection_matrix, _vertice_array_x, _vertice_array_y, _distance_matrix, _weight_matrix, _pheromone_matrix
 
@@ -272,192 +277,143 @@ def pheromone_update(_pheromone_matrix, _N, _shortest_lengths, _shortest_paths, 
 
 
 # Pipeline
-connection_matrix, vertice_array_x, vertice_array_y, distance_matrix, weight_matrix, pheromone_matrix = \
-    create_matrices(N, max_distance)
+vertex_list = [60, 120, 180]
+shortest_length_array = np.zeros([number_of_iterations, 3])
+fig1, ax1 = plt.subplots(1, 3, figsize=(36, 12))
+fig2, ax2 = plt.subplots(1, 3, figsize=(36, 12))
+for j in range(3):
+    connection_matrix, vertice_array_x, vertice_array_y, distance_matrix, weight_matrix, pheromone_matrix = \
+        create_matrices(vertex_list[j], max_distance)
 
-index_range = np.arange(0, N, 1)
-start_location = np.random.choice(index_range)  # index of start location vertex
-index_range = np.delete(index_range, start_location)
-end_location = np.random.choice(index_range)
+    # index_range = np.arange(0, vertex_list[j], 1)
+    # start_location = np.random.choice(index_range)  # index of start location vertex
+    # index_range = np.delete(index_range, start_location)
+    # end_location = np.random.choice(index_range)
+    start_location = 0
+    end_location = vertex_list[j] - 1
 
-first_pheromone_matrix = np.copy(pheromone_matrix)
-shortest_length = np.inf
-shortest_length_array = []
+    first_pheromone_matrix = np.copy(pheromone_matrix)
+    shortest_length = np.inf
+    shortest_single_length = np.inf
 
-for i in range(number_of_iterations):
-    print(f"Current iteration: {i + 1}/{number_of_iterations}")
-    destination_reached = ant_simulation(number_of_ants, start_location, end_location, max_steps, alpha, beta, N,
-                                         connection_matrix, weight_matrix, pheromone_matrix)
-    shortest_paths, shortest_lengths = simplify_all_paths(destination_reached)
-    pheromone_matrix = pheromone_update(pheromone_matrix, N, shortest_lengths, shortest_paths, alpha, beta, rho,
-                                        max_pheromone_per_ant)
-    shortest_single_length = np.min(shortest_lengths)
-    shortest_length_array.append(shortest_single_length)
+    for i in range(number_of_iterations):
+        print(f"Current iteration: {i + 1}/{number_of_iterations}")
+        destination_reached = ant_simulation(number_of_ants, start_location, end_location, max_steps, alpha, beta,
+                                             vertex_list[j], connection_matrix, weight_matrix, pheromone_matrix)
+        if not destination_reached:
+            if i > 0:
+                shortest_single_length = shortest_length_array[i - 1, j]
+        else:
+            shortest_paths, shortest_lengths = simplify_all_paths(destination_reached)
+            if i == 0:
+                explored_paths = np.copy(shortest_paths)
+            pheromone_matrix = pheromone_update(pheromone_matrix, vertex_list[j], shortest_lengths, shortest_paths,
+                                                alpha, beta, rho, max_pheromone_per_ant)
+            shortest_single_length = np.min(shortest_lengths)
+        shortest_length_array[i, j] = shortest_single_length
 
-    if shortest_single_length < shortest_length:
-        shortest_length = shortest_single_length
-        first_min_pheromone_matrix = np.copy(pheromone_matrix)
-        first_min_paths = shortest_paths
+        if shortest_single_length < shortest_length:
+            shortest_length = shortest_single_length
+            first_min_pheromone_matrix = np.copy(pheromone_matrix)
+            first_min_paths = shortest_paths
 
 # Plotting
 # ---------------------------------------------------------------------------------------------------------------------
-fig, ax = plt.subplots(1, 3, figsize=(12, 4))
-annotations = np.arange(1, N + 1, 1)
-ax[0].set_aspect('equal')
-ax[1].set_aspect('equal')
-ax[2].set_aspect('equal')
-pos1 = ax[0].pcolormesh(connection_matrix, cmap='gray_r', edgecolors='darkgreen', linewidth='0.01')
-for axis in [ax[0].xaxis, ax[0].yaxis]:
-    axis.set(ticks=np.arange(0.5, len(annotations)), ticklabels=annotations)
-pos2 = ax[1].pcolormesh(distance_matrix, cmap='gray_r', edgecolors='darkred', linewidth='0.01')
-for axis in [ax[1].xaxis, ax[1].yaxis]:
-    axis.set(ticks=np.arange(0.5, len(annotations)), ticklabels=annotations)
-pos3 = ax[2].plot(vertice_array_x, vertice_array_y, 'wo', markersize=12, markeredgecolor='black',
-                  markerfacecolor='white', alpha=1, zorder=2)
-annotations = np.arange(1, N + 1, 1)
+    annotations = np.arange(1, vertex_list[j] + 1, 1)
 
-for i, value in enumerate(annotations):
-    ax[2].annotate(value, (vertice_array_x[i], vertice_array_y[i]), fontsize=10, color='black',
-                   horizontalalignment='center', verticalalignment='center')
-for i in range(N):
-    for j in range(N):
-        if connection_matrix[i, j] == 1:
-            x_plot = np.array([vertice_array_x[i], vertice_array_x[j]])
-            y_plot = np.array([vertice_array_y[i], vertice_array_y[j]])
-            ax[2].plot(x_plot, y_plot, 'k-', linewidth=0.8, zorder=1)
+    ax1[j].plot(vertice_array_x, vertice_array_y, 'wo', markersize=12, markeredgecolor='black',
+             markerfacecolor='white', alpha=1, zorder=3)
 
-# pos = ax.imshow(distance_matrix, cmap='gray')
-ax[0].set_title("Connection matrix")
-ax[1].set_title("Distance matrix")
-ax[2].set_title("Graph")
-ax[2].grid()
-ax[2].set_xlim((-1, max_distance + 1))
-ax[2].set_ylim((-1, max_distance + 1))
-pos1.set_clim(0, 1)
-pos2.set_clim(0, max_distance)
-cb1 = fig.colorbar(pos1, ax=ax[0], shrink=0.778)
-cb2 = fig.colorbar(pos2, ax=ax[1], shrink=0.778)
+    ax1[j].plot(vertice_array_x[start_location], vertice_array_y[start_location], 'wo', markersize=12, markeredgecolor='black',
+             markerfacecolor='green', alpha=1, zorder=4)
+    ax1[j].plot(vertice_array_x[end_location], vertice_array_y[end_location], 'wo', markersize=12, markeredgecolor='black',
+             markerfacecolor='red', alpha=1, zorder=4)
 
-fig1, ax1 = plt.subplots(1, figsize=(12, 12))
-ax1.plot(vertice_array_x, vertice_array_y, 'wo', markersize=12, markeredgecolor='black',
-         markerfacecolor='white', alpha=1, zorder=3)
+    for i, value in enumerate(annotations):
+        ax1[j].annotate(value, (vertice_array_x[i], vertice_array_y[i]), fontsize=10, color='black',
+                     horizontalalignment='center', verticalalignment='center')
 
-ax1.plot(vertice_array_x[start_location], vertice_array_y[start_location], 'wo', markersize=12, markeredgecolor='black',
-         markerfacecolor='green', alpha=1, zorder=4)
-ax1.plot(vertice_array_x[end_location], vertice_array_y[end_location], 'wo', markersize=12, markeredgecolor='black',
-         markerfacecolor='red', alpha=1, zorder=4)
+    value = annotations[start_location]
+    ax1[j].annotate(value, (vertice_array_x[start_location], vertice_array_y[start_location]), fontsize=10, color='black',
+                 horizontalalignment='center', verticalalignment='center', zorder=4)
+    value = annotations[end_location]
+    ax1[j].annotate(value, (vertice_array_x[end_location], vertice_array_y[end_location]), fontsize=10, color='black',
+                 horizontalalignment='center', verticalalignment='center', zorder=4)
 
-for i, value in enumerate(annotations):
-    ax1.annotate(value, (vertice_array_x[i], vertice_array_y[i]), fontsize=10, color='black',
-                 horizontalalignment='center', verticalalignment='center')
+    linewidth1 = 1
+    linewidth2 = 2
+    for i in range(vertex_list[j]):
+        for k in range(vertex_list[j]):
+            if connection_matrix[i, k] == 1:
+                x_plot = np.array([vertice_array_x[i], vertice_array_x[k]])
+                y_plot = np.array([vertice_array_y[i], vertice_array_y[k]])
+                ax1[j].plot(x_plot, y_plot, 'k-', linewidth=linewidth1, zorder=1)
 
-value = annotations[start_location]
-ax1.annotate(value, (vertice_array_x[start_location], vertice_array_y[start_location]), fontsize=10, color='black',
-             horizontalalignment='center', verticalalignment='center', zorder=4)
-value = annotations[end_location]
-ax1.annotate(value, (vertice_array_x[end_location], vertice_array_y[end_location]), fontsize=10, color='black',
-             horizontalalignment='center', verticalalignment='center', zorder=4)
+    length_of_shortest_path_array = len(explored_paths)
+    for i in range(length_of_shortest_path_array):
+        length_of_path = len(explored_paths[i])
+        current_shortest_path = explored_paths[i]
+        for k in range(length_of_path - 1):
+            x_path = np.array([vertice_array_x[current_shortest_path[k]], vertice_array_x[current_shortest_path[k + 1]]])
+            y_path = np.array([vertice_array_y[current_shortest_path[k]], vertice_array_y[current_shortest_path[k + 1]]])
+            ax1[j].plot(x_path, y_path, 'r--', alpha=0.5, linewidth=linewidth2, zorder=2)
 
-linewidth1 = 1
-linewidth2 = 2
-for i in range(N):
-    for j in range(N):
-        if connection_matrix[i, j] == 1:
-            x_plot = np.array([vertice_array_x[i], vertice_array_x[j]])
-            y_plot = np.array([vertice_array_y[i], vertice_array_y[j]])
-            ax1.plot(x_plot, y_plot, 'k-', linewidth=linewidth1, zorder=1)
-
-length_of_shortest_path_array = len(shortest_paths)
-for i in range(length_of_shortest_path_array):
-    length_of_path = len(shortest_paths[i])
-    current_shortest_path = shortest_paths[i]
-    for j in range(length_of_path - 1):
-        x_path = np.array([vertice_array_x[current_shortest_path[j]], vertice_array_x[current_shortest_path[j + 1]]])
-        y_path = np.array([vertice_array_y[current_shortest_path[j]], vertice_array_y[current_shortest_path[j + 1]]])
-        ax1.plot(x_path, y_path, 'r--', alpha=0.5, linewidth=linewidth2, zorder=2)
-
-ax1.set_title("Ants that reached the end location")
-ax1.set_aspect('equal')
-
-fig2, ax2 = plt.subplots(1, figsize=(12, 12))
-ax2.plot(vertice_array_x, vertice_array_y, 'wo', markersize=12, markeredgecolor='black',
-         markerfacecolor='white', alpha=1, zorder=3)
-
-ax2.plot(vertice_array_x[start_location], vertice_array_y[start_location], 'wo', markersize=12, markeredgecolor='black',
-         markerfacecolor='green', alpha=1, zorder=4)
-ax2.plot(vertice_array_x[end_location], vertice_array_y[end_location], 'wo', markersize=12, markeredgecolor='black',
-         markerfacecolor='red', alpha=1, zorder=4)
-
-for i, value in enumerate(annotations):
-    ax2.annotate(value, (vertice_array_x[i], vertice_array_y[i]), fontsize=10, color='black',
-                 horizontalalignment='center', verticalalignment='center')
-
-value = annotations[start_location]
-ax2.annotate(value, (vertice_array_x[start_location], vertice_array_y[start_location]), fontsize=10, color='black',
-             horizontalalignment='center', verticalalignment='center', zorder=4)
-value = annotations[end_location]
-ax2.annotate(value, (vertice_array_x[end_location], vertice_array_y[end_location]), fontsize=10, color='black',
-             horizontalalignment='center', verticalalignment='center', zorder=4)
-
-linewidth1 = 1
-linewidth2 = 2
-shortest_length_index = np.argmin(shortest_lengths)
-shortest_single_path = shortest_paths[shortest_length_index]
-
-for i in range(N):
-    for j in range(N):
-        if connection_matrix[i, j] == 1:
-            x_plot = np.array([vertice_array_x[i], vertice_array_x[j]])
-            y_plot = np.array([vertice_array_y[i], vertice_array_y[j]])
-            ax2.plot(x_plot, y_plot, 'k-', linewidth=linewidth1, zorder=1)
-
-length_of_path = len(shortest_single_path)
-current_shortest_path = shortest_single_path
-print(f"The shortest path is: {current_shortest_path}")
-print(f"The shortest length is: {shortest_lengths[shortest_length_index]}")
-for j in range(length_of_path - 1):
-    x_path = np.array([vertice_array_x[current_shortest_path[j]], vertice_array_x[current_shortest_path[j + 1]]])
-    y_path = np.array([vertice_array_y[current_shortest_path[j]], vertice_array_y[current_shortest_path[j + 1]]])
-    ax2.plot(x_path, y_path, 'r--', alpha=1, linewidth=linewidth2, zorder=2)
-
-ax2.set_aspect('equal')
-ax2.set_title("The shortest path")
-
-fig3, ax3 = plt.subplots(1, 3, figsize=(36, 12))
-ax3[0].plot(vertice_array_x, vertice_array_y, 'wo', markersize=12, markeredgecolor='black',
-            markerfacecolor='white', alpha=1, zorder=3)
-ax3[1].plot(vertice_array_x, vertice_array_y, 'wo', markersize=12, markeredgecolor='black',
-            markerfacecolor='white', alpha=1, zorder=3)
-ax3[2].plot(vertice_array_x, vertice_array_y, 'wo', markersize=12, markeredgecolor='black',
-            markerfacecolor='white', alpha=1, zorder=3)
-for i, value in enumerate(annotations):
-    for j in range(3):
-        ax3[j].annotate(value, (vertice_array_x[i], vertice_array_y[i]), fontsize=10, color='black',
-                        horizontalalignment='center', verticalalignment='center')
-
-for i in range(N):
-    for j in range(N):
-        if connection_matrix[i, j] == 1:
-            x_plot = np.array([vertice_array_x[i], vertice_array_x[j]])
-            y_plot = np.array([vertice_array_y[i], vertice_array_y[j]])
-            for k in range(3):
-                ax3[k].plot(x_plot, y_plot, 'k-', linewidth=linewidth1, zorder=1)
-                ax3[k].set_aspect('equal')
-            ax3[0].plot(x_plot, y_plot, 'orange', linewidth=(linewidth2 * first_pheromone_matrix[i, j]), zorder=2,
-                        alpha=1)
-            ax3[1].plot(x_plot, y_plot, 'orange', linewidth=(linewidth2 * first_min_pheromone_matrix[i, j]), zorder=2,
-                        alpha=1)
-            ax3[2].plot(x_plot, y_plot, 'orange', linewidth=(linewidth2 * pheromone_matrix[i, j]), zorder=2, alpha=1)
-            ax3[0].set_title("Initial pheromone matrix")
-            ax3[1].set_title("Pheromone matrix, first minimum")
-            ax3[2].set_title("Pheromone matrix, final step")
+    ax1[j].set_title("Exploration of graphs at first step")
+    ax1[j].set_aspect('equal')
 
 
-shortest_plot = np.arange(0, len(shortest_length_array), 1)
+    ax2[j].plot(vertice_array_x, vertice_array_y, 'wo', markersize=12, markeredgecolor='black',
+             markerfacecolor='white', alpha=1, zorder=3)
+
+    ax2[j].plot(vertice_array_x[start_location], vertice_array_y[start_location], 'wo', markersize=12, markeredgecolor='black',
+             markerfacecolor='green', alpha=1, zorder=4)
+    ax2[j].plot(vertice_array_x[end_location], vertice_array_y[end_location], 'wo', markersize=12, markeredgecolor='black',
+             markerfacecolor='red', alpha=1, zorder=4)
+
+    for i, value in enumerate(annotations):
+        ax2[j].annotate(value, (vertice_array_x[i], vertice_array_y[i]), fontsize=10, color='black',
+                     horizontalalignment='center', verticalalignment='center')
+
+    value = annotations[start_location]
+    ax2[j].annotate(value, (vertice_array_x[start_location], vertice_array_y[start_location]), fontsize=10, color='black',
+                 horizontalalignment='center', verticalalignment='center', zorder=4)
+    value = annotations[end_location]
+    ax2[j].annotate(value, (vertice_array_x[end_location], vertice_array_y[end_location]), fontsize=10, color='black',
+                 horizontalalignment='center', verticalalignment='center', zorder=4)
+
+    linewidth1 = 1
+    linewidth2 = 2
+    shortest_length_index = np.argmin(shortest_lengths)
+    shortest_single_path = shortest_paths[shortest_length_index]
+
+    for i in range(vertex_list[j]):
+        for k in range(vertex_list[j]):
+            if connection_matrix[i, k] == 1:
+                x_plot = np.array([vertice_array_x[i], vertice_array_x[k]])
+                y_plot = np.array([vertice_array_y[i], vertice_array_y[k]])
+                ax2[j].plot(x_plot, y_plot, 'k-', linewidth=linewidth1, zorder=1)
+
+    length_of_path = len(shortest_single_path)
+    current_shortest_path = shortest_single_path
+    print(f"The shortest path is: {current_shortest_path}")
+    print(f"The shortest length is: {shortest_length_array[:, j][shortest_length_index]}")
+    for k in range(length_of_path - 1):
+        x_path = np.array([vertice_array_x[current_shortest_path[k]], vertice_array_x[current_shortest_path[k + 1]]])
+        y_path = np.array([vertice_array_y[current_shortest_path[k]], vertice_array_y[current_shortest_path[k + 1]]])
+        ax2[j].plot(x_path, y_path, 'r--', alpha=1, linewidth=linewidth2, zorder=2)
+
+    ax2[j].set_aspect('equal')
+    ax2[j].set_title("The shortest path")
+
+color_list = ['black', 'darkred', 'darkblue']
 plt.figure()
-plt.plot(shortest_plot, shortest_length_array, 'k')
+for i in range(3):
+    shortest_plot = np.arange(0, len(shortest_length_array[:, i]), 1)
+    plt.plot(shortest_plot, shortest_length_array[:, i], color=color_list[i], label=f'N = {vertex_list[i]}')
 plt.xlabel("Iteration")
 plt.ylabel("Path length")
 plt.title("Path length vs iteration")
+plt.legend()
+
 plt.tight_layout()
 plt.show()
